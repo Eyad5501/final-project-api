@@ -12,14 +12,14 @@ router.get("/", async (req, res) => {
   })
 router.post("/", checkTokene, validateBody(studyJoi), async (req, res) => {
     try {
-      const {orderid,study } = req.body
+      const {orderid, study } = req.body
       const order = await Order.findById(orderid)
  
       if (!order) return res.status(404).send("order not found")
       const studies = new Study({
         uesrid: order.userid,
         companyid: order.companyid,
-        orderid,
+        orderid:orderid,
         study,
         employeeid:req.employeeId,
       })

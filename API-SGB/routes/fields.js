@@ -46,7 +46,7 @@ router.put("/:id",checkAdminemployee, checkId, validateBody(fieldJoi),async (req
     res.status(500).send(error)
   }
 })
-router.delete("/:id",checkAdminemployee, checkId, async (req, res) => {
+router.delete("/:id",checkAdmin, checkId, async (req, res) => {
   try {
     const field = await Field.findByIdAndRemove(req.params.id)
     if (!field) return res.status(404).send("field not found")

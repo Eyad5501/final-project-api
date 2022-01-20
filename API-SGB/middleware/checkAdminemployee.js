@@ -15,7 +15,7 @@ const checkAdminemployee = async (req, res, next) => {
 
     const adminFound = await User.findById(userId)
 
-    if (adminFound.role !== "Admin" && employee.role !== "Employee") return res.status(403).send("you are not admin or employee")
+    if (adminFound?.role !== "Admin" && !employee) return res.status(403).send("you are not admin or employee")
     req.userId = userId
     next()
   } catch (error) {

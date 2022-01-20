@@ -1,6 +1,6 @@
 const express = require("express")
 const checkAdminemployee = require("../middleware/checkAdminemployee")
-const checkTokenCandE=require("../middleware/checkTokenCandE")
+const nodemailer = require("nodemailer")
 const router = express.Router()
 const jwt = require("jsonwebtoken")
 const bcrypt = require("bcrypt")
@@ -15,9 +15,12 @@ const {
 const checkId = require("../middleware/checkId")
 const validateBody = require("../middleware/validateBody")
 const checkTokene = require("../middleware/checkTokene")
+const checkAdmin = require("../middleware/checkAdmin")
+const checkTokenc = require("../middleware/checkTokenc")
+const { Company } = require("../models/Company")
 
 router.get("/", async (req, res) => {
-  const employees = await Employee.find().populate("fields").populate("orders")
+  const employees = await Employee.find().populate("fields").populate("orders").populate("companyid")
   res.json(employees)
 })
 // router.get("/:id", checkId, async (req, res) => {
@@ -40,10 +43,12 @@ router.get("/:companyid/:Filed", checkTokene, async (req, res) => {
     res.status(500).send(error.message)
   }
 })
-router.post("/", checkAdminemployee, validateBody(employeeAddJoi), async (req, res) => {
+router.post("/", checkTokenc, validateBody(employeeAddJoi), async (req, res) => {
   try {
-    const { firstName, lastName, photo, phone, email, studise, fields, companyid } = req.body
+    const { firstName, lastName, photo, phone, email, studise, fields, companyid, password } = req.body
 
+    const salt = await bcrypt.genSalt(10)
+    const hash = await bcrypt.hash(password, salt)
     const employee = new Employee({
       firstName,
       lastName,
@@ -52,33 +57,57 @@ router.post("/", checkAdminemployee, validateBody(employeeAddJoi), async (req, r
       email,
       studise,
       fields,
-      companyid,
-      role:"Employee"
+      password: hash,
+      companyid: req.companyid,
+      role: "Employee",
     })
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      port: 587,
+      secure: false,
+      auth: {
+        user: "eyaz07873@gmail.com",
+        pass: `${process.env.GMAIL_PASS}`,
+      },
+    })
+
+    await transporter.sendMail({
+      from: '"Mohmmad Ahmed" <test3705968@gmail.com>',
+      to: email,
+      subject: "Company account created",
+
+      html: `email company: ${email}
+      <br>
+      password: ${password} `,
+    })
+
     await employee.save()
+
+    await Company.findByIdAndUpdate(req.companyid, { $push: { employees: employee._id } }, { new: true })
 
     res.json(employee)
   } catch (error) {
     res.status(500).send(error.message)
   }
 })
-router.put("/:id", checkId, checkAdminemployee, validateBody(employeeEditJoi), async (req, res) => {
-  try {
-    const { firstName, lastName, photo, phone, email, studise, fields } = req.body
+// router.put("/:id", checkId, checkAdmin, validateBody(employeeEditJoi), async (req, res) => {
+//   try {
+//     const { firstName, lastName, photo, phone, email, studise, fields } = req.body
 
-    const employee = await Employee.findByIdAndUpdate(
-      req.params.id,
-      { $set: { firstName, lastName, photo, phone, email, studise, fields } },
-      { new: true }
-    )
-    if (!employee) return res.status(404).send("employee not found")
+//     const employee = await Employee.findByIdAndUpdate(
+//       req.params.id,
+//       { $set: { firstName, lastName, photo, phone, email, studise, fields } },
+//       { new: true }
+//     )
+//     if (!employee) return res.status(404).send("employee not found")
 
-    res.json(employee)
-  } catch (error) {
-    res.status(500).send(error)
-  }
-})
-router.delete("/:id", checkId, checkAdminemployee, async (req, res) => {
+//     res.json(employee)
+//   } catch (error) {
+//     res.status(500).send(error)
+//   }
+// })
+router.delete("/:id", checkId, checkAdmin, async (req, res) => {
   try {
     const employee = await Employee.findByIdAndRemove(req.params.id)
     if (!employee) return res.status(404).send("employee not found")
@@ -107,21 +136,42 @@ router.post("/login", validateBody(employeeloginJoi), async (req, res) => {
 })
 router.get("/profile", checkTokene, async (req, res) => {
   try {
-    const employee = await Employee.findById(req.employeeId).select("-__v -password").populate({
-      path: "orders",
-      populate: {
-        path: "userid",
-        select: "-password -email -role",
-      },
-    })
-  
+    const employee = await Employee.findById(req.employeeId)
+      .select("-__v -password")
+      .populate({
+        path: "orders",
+        populate: [
+          {
+            path: "userid",
+            select: "-password -email -role",
+          },
+          {
+            path: "companyid",
+          },
+        ],
+      })
+
+      .populate({
+        path: "studise",
+        populate: [
+          {
+            path: "uesrid",
+            select: "-password -email -role",
+          },
+          ,
+          {
+            path: "orderid",
+          },
+        ],
+      })
+      .populate("phone")
 
     res.json(employee)
   } catch (error) {
     res.status(500).json(error.message)
   }
 })
-router.put("/profile", checkAdminemployee, validateBody(employeeprofileJoi), async (req, res) => {
+router.put("/profile", checkTokene, validateBody(employeeprofileJoi), async (req, res) => {
   const { firstName, lastName, password, photo, phone } = req.body
 
   let hash
@@ -131,7 +181,7 @@ router.put("/profile", checkAdminemployee, validateBody(employeeprofileJoi), asy
   }
 
   const employee = await Employee.findByIdAndUpdate(
-    req.employeeid,
+    req.employeeId,
     { $set: { firstName, lastName, password: hash, photo, phone } },
     { new: true }
   ).select("-__v -password")

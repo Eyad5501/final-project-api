@@ -15,7 +15,7 @@ router.get("/", async (req, res) => {
 })
 router.post("/signup", validateBody(signUpJoi), async (req, res) => {
   try {
-    const { firstName, lastName, email, phoneNumber, password, avatar } = req.body
+    const { firstName, lastName, email, phone, password, avatar } = req.body
 
     const userFound = await User.findOne({ email })
     if (userFound) return res.status(400).send("user already registered")
@@ -27,7 +27,7 @@ router.post("/signup", validateBody(signUpJoi), async (req, res) => {
       firstName,
       lastName,
       email,
-      phoneNumber,
+      phone,
       password: hash,
       avatar,
       role: "User",
@@ -103,7 +103,7 @@ router.post("/login/admin", validateBody(loginJoi), async (req, res) => {
 })
 router.post("/add-admin", checkAdmin, async (req, res) => {
   try {
-    const { firstName, lastName, email, password, avatar } = req.body
+    const { firstName, lastName, email, password, avatar,phone } = req.body
 
     const result = signUpJoi.validate(req.body)
     if (result.error) return res.status(400).send(result.error.details[0].message)
@@ -120,6 +120,7 @@ router.post("/add-admin", checkAdmin, async (req, res) => {
       email,
       password: hash,
       avatar,
+      phone,
       role: "Admin",
     })
 
@@ -140,7 +141,7 @@ router.post("/add-Company", checkAdmin, async (req, res) => {
     if (result.error) return res.status(400).send(result.error.details[0].message)
 
     const companyFound = await Company.findOne({ email })
-    if (companyFound) return res.status(400).send("user already registered")
+    if (companyFound) return res.status(400).send("Company already registered")
 
     const salt = await bcrypt.genSalt(10)
     const hash = await bcrypt.hash(password, salt)
@@ -152,23 +153,25 @@ router.post("/add-Company", checkAdmin, async (req, res) => {
       photo,
       role: "Company",
     })
-    // const transporter = nodemailer.createTransport({
-    //   service: "gmail",
-    //   port: 587,
-    //   secure: false,
-    //   auth: {
-    //     user: "test3705968@gmail.com",
-    //     pass: `${process.env.GMAIL_PASS}`,
-    //   },
-    // })
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      port: 587,
+      secure: false,
+      auth: {
+        user: "eyaz07873@gmail.com",
+        pass: `${process.env.GMAIL_PASS}`,
+      },
+    })
 
-    // await transporter.sendMail({
-    //   from: '"Mohmmad Ahmed" <test3705968@gmail.com>',
-    //   to: email,
-    //   subject: "Email verification",
+    await transporter.sendMail({
+      from: '"Mohmmad Ahmed" <test3705968@gmail.com>',
+      to: email,
+      subject: "Company account created",
 
-    //   html: ` `,
-    // })
+      html: `email company: ${email}
+      <br>
+      password: ${password} `,
+    })
     await company.save()
 
     delete company._doc.password
@@ -182,7 +185,7 @@ router.get("/users", checkAdmin, async (req, res) => {
   const users = await User.find().select("-password -__v")
   res.json(users)
 })
-router.delete("/users/:id", checkAdmin, checkId, async (req, res) => {
+router.delete("/users/:id",checkId, checkAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id)
     if (!user) return res.status(404).send("user not found")

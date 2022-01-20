@@ -54,7 +54,7 @@ const companySchema = new mongoose.Schema({
 const companyAddJoi = Joi.object({
   nameCompany: Joi.string().min(1).max(200).required(),
   photo: Joi.string().uri().min(5).max(1000).required(),
-  email: Joi.string().email(),
+  email: Joi.string().email().required(),
   password: Joi.string().min(6).max(100).required(),
   employees: Joi.array().items(Joi.objectid()).min(1),
   fields: Joi.array().items(Joi.objectid()).min(1),
@@ -62,7 +62,7 @@ const companyAddJoi = Joi.object({
 const companyEditJoi = Joi.object({
   nameCompany: Joi.string().min(1).max(200),
   photo: Joi.string().uri().min(5).max(1000),
-  employees: Joi.array().items(Joi.objectid()).min(1),
+  email: Joi.string().email(),
   fields: Joi.array().items(Joi.objectid()).min(1),
 })
 const ratingJoi = Joi.object({
@@ -79,9 +79,9 @@ const companyloginJoi = Joi.object({
   password: Joi.string().min(6).max(100).required(),
 })
 const companyprofileJoi = Joi.object({
-  nameCompany: Joi.string().min(2).max(100).required(),
-  email: Joi.string().email().required(),
-  photo: Joi.string().uri().required(),
+  nameCompany: Joi.string().min(2).max(100),
+  email: Joi.string().email(),
+  photo: Joi.string().uri(),
 })
 const companyAddCompanyPJoi = Joi.object({
   nameCompany: Joi.string().min(1).max(200).required(),

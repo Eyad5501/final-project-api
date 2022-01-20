@@ -6,6 +6,7 @@ const OrderSchema = new mongoose.Schema({
   posterP: String,
   areaP: Number,
   LocationP: String,
+  study:String,
   orderstatus: {
     type: String,
     default: "pending",

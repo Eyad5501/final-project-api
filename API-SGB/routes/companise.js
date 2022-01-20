@@ -3,8 +3,9 @@ const router = express.Router()
 const bcrypt = require("bcrypt")
 const jwt = require("jsonwebtoken")
 const nodemailer = require("nodemailer")
-const checkTokenCandE = require("../middleware/checkTokenCandE")
+
 const checkId = require("../middleware/checkId")
+
 const {
   Company,
   companyAddJoi,
@@ -12,7 +13,6 @@ const {
   ratingJoi,
   companyloginJoi,
   companyprofileJoi,
-  companyAddCompanyPJoi,
 } = require("../models/Company")
 const validateId = require("../middleware/validateId")
 const { User } = require("../models/User")
@@ -52,30 +52,36 @@ router.get("/", async (req, res) => {
     })
   res.json(companise)
 })
-router
-  .get("/profile", checkTokenc, async (req, res) => {
-    try {
-      const company = await Company.findById(req.companyid)
-        .select("-__v -password")
-        .populate({
-          path: "orders",
-          populate: {
-            path: "userid",
-            select: "-password -email -role",
-          },
-        })
-        .populate({
-          path: "orders",
-          populate: {
-            path: "fieldid",
-          },
-        })
-        .populate("employees").populate("photo")
-      res.json(company)
-    } catch (error) {
-      res.status(500).json(error.message)
-    }
-  })
+router.get("/profile", checkTokenc, async (req, res) => {
+  try {
+    const company = await Company.findById(req.companyid)
+      .select("-__v -password")
+      .populate({
+        path: "orders",
+        populate: {
+          path: "userid",
+          select: "-password -email -role",
+        },
+      })
+      .populate({
+        path: "orders",
+        populate: {
+          path: "fieldid",
+        },
+      })
+      .populate({
+        path: "employees",
+        populate: {
+          path: "fields",
+        },
+      })
+
+      .populate("photo")
+    res.json(company)
+  } catch (error) {
+    res.status(500).json(error.message)
+  }
+})
 
 router.put("/profile", checkTokenc, validateBody(companyprofileJoi), async (req, res) => {
   const { nameCompany, email, password, photo, fields } = req.body
@@ -88,7 +94,7 @@ router.put("/profile", checkTokenc, validateBody(companyprofileJoi), async (req,
 
   const company = await Company.findByIdAndUpdate(
     req.companyid,
-    { $set: { nameCompany, email, password, photo, fields } },
+    { $set: { nameCompany, email, password:hash, photo, fields } },
     { new: true }
   ).select("-__v -password")
   res.json(company)
@@ -111,23 +117,40 @@ router.get("/:id", checkId, async (req, res) => {
     res.status(500).send(error.message)
   }
 })
-router.post("/addPosted", checkCompany, validateBody(companyAddCompanyPJoi), async (req, res) => {
+router.post("/", checkAdmin, validateBody(companyAddJoi), async (req, res) => {
   try {
-    const { nameCompany, employees, fields, photo } = req.body
-    // const employeesSet = new Set(employees)
-    // if (employeesSet.size < employees.length) return res.status(400).send("threr is a duplicated employee")
-    // const employeesFound = await Employee.find({ _id: { $in: employees } })
-    // if (employeesFound.length < employees.length) return res.status(404).send("some of the employees is not found")
-    // const fieldsSet = new Set(fields)
-    // if (fieldsSet.size < fields.length) return res.status(400).send("threr is a duplicated field")
-    // const fieldsFound = await Genre.find({ _id: { $in: fields }, type: "Genre" })
-    // if (fieldsFound.length < fields.length) return res.status(404).send("some of the fields is not found")
+    const { nameCompany, employees, fields, photo, email, password } = req.body
+    const salt = await bcrypt.genSalt(10)
+    const hash = await bcrypt.hash(password, salt)
     const company = await Company({
       nameCompany,
       employees,
       fields,
       photo,
+      email,
+      password: hash,
     })
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      port: 587,
+      secure: false,
+      auth: {
+        user: "eyaz07873@gmail.com",
+        pass: `${process.env.GMAIL_PASS}`,
+      },
+    })
+
+    await transporter.sendMail({
+      from: '"Mohmmad Ahmed" <test3705968@gmail.com>',
+      to: email,
+      subject: "Company account created",
+
+      html: `email company: ${email}
+      <br>
+      password: ${password} `,
+    })
+
     await company.save()
     res.json(company)
   } catch (error) {
@@ -135,7 +158,7 @@ router.post("/addPosted", checkCompany, validateBody(companyAddCompanyPJoi), asy
     res.status(500).send(error.message)
   }
 })
-router.put("/:id", checkAdmin, validateBody(companyEditJoi), async (req, res) => {
+router.put("/:id", checkId, checkAdmin, validateBody(companyEditJoi), async (req, res) => {
   try {
     const { nameCompany, employees, photo, fields } = req.body
     if (employees) {
@@ -152,7 +175,7 @@ router.put("/:id", checkAdmin, validateBody(companyEditJoi), async (req, res) =>
     // }
     const company = await Company.findByIdAndUpdate(
       req.params.id,
-      { $set: { nameCompany, employees, fields, photo } },
+      { $set: { nameCompany, fields, photo } },
       { new: true }
     )
     if (!company) return res.status(404).send("company not found")
@@ -163,9 +186,10 @@ router.put("/:id", checkAdmin, validateBody(companyEditJoi), async (req, res) =>
   }
 })
 
-router.delete("/:id", checkAdmin, checkCompany, checkId, async (req, res) => {
+router.delete("/:id", checkAdmin, checkId, async (req, res) => {
   try {
     const company = await Company.findByIdAndRemove(req.params.id)
+
     if (!company) return res.status(404).send("company not found")
     res.send("companise remove")
   } catch (error) {
@@ -302,7 +326,7 @@ router.post("/:companyid/ratings", checkTokenu, validateId("companyid"), validat
 })
 router.post("/add-employee", checkCompany, validateBody(employeesignUpJoi), async (req, res) => {
   try {
-    const { firstName, lastName, email, phoneNumber, password, photo } = req.body
+    const { firstName, lastName, email, phone, password, photo } = req.body
 
     const employeesFound = await Employee.findOne({ email })
     if (employeesFound) return res.status(400).send("employees already registered")
@@ -314,28 +338,30 @@ router.post("/add-employee", checkCompany, validateBody(employeesignUpJoi), asyn
       firstName,
       lastName,
       email,
-      phoneNumber,
+      phone,
       password: hash,
       photo,
+
       role: "Employee",
     })
-    // const transporter = nodemailer.createTransport({
-    //   service: "gmail",
-    //   port: 587,
-    //   secure: false,
-    //   auth: {
-    //     user: "test3705968@gmail.com",
-    //     pass: `${process.env.GMAIL_PASS}`,
-    //   },
-    // })
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      port: 587,
+      secure: false,
+      auth: {
+        user: "eyaz07873@gmail.com",
+        pass: `${process.env.GMAIL_PASS}`,
+      },
+    })
 
-    // await transporter.sendMail({
-    //   from: '"Mohmmad Ahmed" <test3705968@gmail.com>',
-    //   to: email,
-    //   subject: "Email verification",
+    await transporter.sendMail({
+      from: '"Eyad Ahmed" <eyaz07873@gmail.com>',
+      // to: study.uesrid.email,
+      to: "eyaz07873@gmail.com",
 
-    //   html: ` `,
-    // })
+      subject: "Email",
+      html: ` eyghd12@vew.com`,
+    })
 
     await employee.save()
     await Company.findByIdAndUpdate(req.companyId, { $push: { employees: employee._id } })
